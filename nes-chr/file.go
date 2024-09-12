@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"io"
-	"os"
 
 	"github.com/theobori/nes-chr/internal/util"
 )
@@ -71,14 +69,7 @@ func NewNESFileFromBytes(chunk []byte) (*NESFile, error) {
 }
 
 func NewNESFile(path string) (*NESFile, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-
-	defer f.Close()
-
-	chunk, err := io.ReadAll(f)
+	chunk, err := util.ReadChunk(path)
 	if err != nil {
 		return nil, err
 	}

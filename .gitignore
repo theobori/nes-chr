@@ -25,8 +25,8 @@ go.work.sum
 .env
 
 # Generated resources
-*.chr
-*.png
+/*.chr
 /*.nes
 .direnv
 result
+*.png
