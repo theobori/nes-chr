@@ -1,332 +1,173 @@
 package neschr
 
 import (
-	"bytes"
 	"fmt"
 	"image"
-	"image/color"
-	"image/png"
-	"os"
 
 	"github.com/theobori/nes-chr/internal/util"
 )
 
-const (
-	CHRImagePixelWidth  = 128
-	CHRImagePixelHeight = 128
-)
-
-type ColorScheme [4][3]byte
-
-var (
-	DefaultColorScheme = ColorScheme{
-		{0, 0, 0},
-		{126, 126, 126},
-		{189, 189, 189},
-		{255, 255, 255},
-	}
-
-	ColorSchemes = []ColorScheme{
-		DefaultColorScheme,
-		{
-			{34, 139, 34},
-			{139, 69, 19},
-			{210, 180, 140},
-			{160, 82, 45},
-		},
-		{
-			{0, 105, 148},
-			{135, 206, 235},
-			{70, 130, 180},
-			{240, 248, 255},
-		},
-		{
-			{255, 69, 0},
-			{255, 140, 0},
-			{255, 215, 0},
-			{139, 0, 0},
-		},
-		{
-			{169, 169, 169},
-			{192, 192, 192},
-			{105, 105, 105},
-			{220, 220, 220},
-		},
-	}
-)
-
-type Colorpalette [4]color.Color
-
-func ColorPaletteFromScheme(scheme ColorScheme) Colorpalette {
-	var palette Colorpalette
-
-	for i, c := range scheme {
-		palette[i] = color.RGBA{c[0], c[1], c[2], 255}
-	}
-
-	return palette
+func isCHRImageSizeValid(w int, h int) bool {
+	return w == CHRBankImageWidth && h%CHRBankImageHeight == 0 &&
+		h >= CHRBankImageHeight
 }
 
-func ColorPaletteFromIndex(index int) (*Colorpalette, error) {
-	if index < 0 || index >= len(ColorSchemes) {
-		return nil, fmt.Errorf("palette are between %d and %d", 0, len(ColorSchemes))
-	}
-
-	scheme := ColorSchemes[index]
-	palette := ColorPaletteFromScheme(scheme)
-
-	return &palette, nil
+type CHR struct {
+	banks []CHRBank
 }
 
-func isColorEqual(src, dest color.Color) (bool, error) {
-	err := fmt.Errorf("unable to assert to RGBA")
+func NewCHR(chunk []byte) *CHR {
+	banks := []CHRBank{}
 
-	srcRGBA, ok := src.(color.RGBA)
-	if !ok {
-		return false, err
-	}
-
-	destRGBA, ok := dest.(color.RGBA)
-	if !ok {
-		return false, err
-	}
-
-	return srcRGBA == destRGBA, nil
-}
-
-func (cp *Colorpalette) Index(dest color.Color) (int, error) {
-	for i, src := range cp {
-		ok, err := isColorEqual(src, dest)
-		if err != nil {
-			return -1, err
-		}
-
-		if ok {
-			return i, nil
+	if len(chunk) < CHRRomBankSize {
+		return &CHR{
+			banks: banks,
 		}
 	}
 
-	return -1, fmt.Errorf("this color does not exists")
-}
+	for i := 0; i < len(chunk); i += CHRRomBankSize {
+		bankChunk := chunk[i : i+CHRRomBankSize]
+		banks = append(banks, *NewCHRBank(bankChunk))
+	}
 
-func isImageSizeValid(w int, h int) bool {
-	return w == CHRImagePixelWidth && h%CHRImagePixelHeight == 0 &&
-		h >= CHRImagePixelHeight
-}
-
-type NESCHR struct {
-	chunk        []byte
-	colorPalette Colorpalette
-	bankAmount   int
-}
-
-func NewNESCHR(chunk []byte) *NESCHR {
-	return &NESCHR{
-		chunk:        chunk,
-		colorPalette: ColorPaletteFromScheme(DefaultColorScheme),
-		bankAmount:   len(chunk) / CHRRomBankSize,
+	return &CHR{
+		banks: banks,
 	}
 }
 
-func NewNESCHRFromFile(path string) (*NESCHR, error) {
+func NewCHRFromFile(path string) (*CHR, error) {
 	b, err := util.ReadChunk(path)
 	if err != nil {
 		return nil, err
 	}
 
-	return NewNESCHR(b), nil
+	return NewCHR(b), nil
 }
 
-func NewEmptyNESCHR() *NESCHR {
-	return NewNESCHR([]byte{})
+func NewEmptyCHR() *CHR {
+	return NewCHR([]byte{})
 }
 
-func (chr *NESCHR) Chunk() []byte {
-	return chr.chunk
+func (chr *CHR) BankAmount() int {
+	return len(chr.banks)
 }
 
-func (chr *NESCHR) Bank(n int) ([]byte, error) {
-	if n < 0 || n >= chr.bankAmount {
-		return nil, fmt.Errorf("%d is out of the CHR ROM", n)
+func (chr *CHR) IsEmpty() bool {
+	return chr.BankAmount() == 0
+}
+
+func (chr *CHR) Bank(i int) (*CHRBank, error) {
+	if i < 0 || i >= len(chr.banks) {
+		return nil, fmt.Errorf("bank index is out of range")
 	}
 
-	start := CHRRomBankSize * n
-	bank := chr.chunk[start : start+CHRRomBankSize]
-
-	return bank, nil
+	return &chr.banks[i], nil
 }
 
-func (chr *NESCHR) SetCustomColorPalette(palette Colorpalette) {
-	chr.colorPalette = palette
-}
-
-func (chr *NESCHR) SetColorPalette(index int) error {
-	palette, err := ColorPaletteFromIndex(index)
+func (chr *CHR) SetBank(i int, bank *CHRBank) error {
+	srcBank, err := chr.Bank(i)
 	if err != nil {
 		return err
 	}
 
-	chr.SetCustomColorPalette(*palette)
+	*srcBank = *bank
 
 	return nil
 }
 
+func (chr *CHR) AddBank(bank *CHRBank) {
+	chr.banks = append(chr.banks, *bank)
+}
+
+func (chr *CHR) Chunk() []byte {
+	chunk := []byte{}
+
+	for i := 0; i < chr.BankAmount(); i++ {
+		bank, _ := chr.Bank(i)
+		chunk = append(chunk, bank.Chunk()...)
+	}
+
+	return chunk
+}
+
 // Returns the image size in pixels
-func (chr *NESCHR) ImageSize() (int, int) {
-	if chr.bankAmount == 0 {
+func (chr *CHR) ImageSize() (int, int) {
+	if chr.BankAmount() == 0 {
 		return 0, 0
 	}
 
-	return CHRImagePixelWidth, CHRImagePixelHeight * chr.bankAmount
+	return CHRBankImageWidth, CHRBankImageHeight * chr.BankAmount()
 }
 
-func (chr *NESCHR) extractBank(img *image.RGBA, bank []byte, offsetY int) {
-	memY, memX := 0, 0
-
-	for b := 0; b < CHRRomBankSize; b += 16 {
-		for y := 0; y < 8; y++ {
-			if memX >= CHRImagePixelWidth {
-				memY += 8
-				memX = 0
-			}
-
-			lo := bank[b+y]
-			hi := bank[b+y+8]
-
-			for bit := 0; bit < 8; bit++ {
-				left := lo >> (7 - bit) & 1
-				right := hi >> (7 - bit) & 1
-				color := chr.colorPalette[right<<1|left]
-
-				img.Set(bit+memX, y+memY+offsetY, color)
-			}
-		}
-
-		memX += 8
-	}
-}
-
-func (chr *NESCHR) ExtractImage() (*image.RGBA, error) {
+func (chr *CHR) Image() image.Image {
 	w, h := chr.ImageSize()
 	rect := image.Rect(0, 0, w, h)
 
 	img := image.NewRGBA(rect)
 
-	for i := 0; i < chr.bankAmount; i++ {
-		bank, err := chr.Bank(i)
-		if err != nil {
-			return nil, err
-		}
+	offset := 0
 
-		chr.extractBank(img, bank, CHRImagePixelWidth*i)
-	}
+	for i := 0; i < chr.BankAmount(); i++ {
+		bankImage := chr.banks[i].Image()
 
-	return img, nil
-}
-
-func (chr *NESCHR) copyFromChunk(chunk []byte) *NESCHR {
-	dest := NewNESCHR(chunk)
-	dest.SetCustomColorPalette(chr.colorPalette)
-
-	*chr = *dest
-
-	return chr
-}
-
-func (chr *NESCHR) injectPixels(img image.Image, w, h int) error {
-	// Prepare the chunk to store the CHR data
-	chunk := make([]byte, (h/w)*CHRRomBankSize)
-	chunkIndex := 0
-
-	for tileY := 0; tileY < h; tileY += 8 {
-		for tileX := 0; tileX < w; tileX += 8 {
-			for y := 0; y < 8; y++ {
-				var lo, hi byte = 0, 0
-
-				for bit := 0; bit < 8; bit++ {
-					color := img.At(tileX+bit, tileY+y)
-					colorValue, err := chr.colorPalette.Index(color)
-					if err != nil {
-						return err
-					}
-
-					lo |= (byte(colorValue) & 1) << (7 - bit)
-					hi |= (byte(colorValue) >> 1 & 1) << (7 - bit)
-				}
-
-				chunk[chunkIndex] = lo
-				chunk[chunkIndex+8] = hi
-				chunkIndex++
+		for y := 0; y < CHRBankImageHeight; y++ {
+			for x := 0; x < CHRBankImageWidth; x++ {
+				c := bankImage.At(x, y)
+				img.Set(x, offset+y, c)
 			}
-
-			chunkIndex += 8
 		}
+
+		offset += CHRBankImageHeight
 	}
 
-	chr.copyFromChunk(chunk)
-
-	return nil
+	return img
 }
 
-func (chr *NESCHR) InjectImage(img image.Image) error {
-	// Check if the image has the same width and height
-	// as the extracted one with `ExtractImage`.
+func (chr *CHR) SetFromImage(img image.Image) error {
 	bounds := img.Bounds()
 	w := bounds.Max.X
 	h := bounds.Max.Y
 
-	romW, romH := chr.ImageSize()
+	isEmpty := chr.IsEmpty()
 
-	// If there is an existing ROM, it compares the ROM and the image size
-	if len(chr.chunk) != 0 && (w != romW || h != romH) {
-		return fmt.Errorf("invalid image size, it must be %dx%d", romW, romH)
+	if !isEmpty && w != CHRBankImageWidth && h != chr.BankAmount()*CHRBankImageHeight {
+		return fmt.Errorf(
+			"invalid image size, it must be %dx%d",
+			CHRBankImageWidth,
+			chr.BankAmount()*CHRBankImageHeight,
+		)
 	}
 
-	// Check image width and height
-	if !isImageSizeValid(w, h) {
-		return fmt.Errorf("invalid image size")
+	if !isCHRImageSizeValid(w, h) {
+		return fmt.Errorf("invalid image size, %dx%d", w, h)
 	}
 
-	// Encode pixels into the CHR memory
-	return chr.injectPixels(img, w, h)
-}
+	for y := 0; y < h; y += CHRBankImageHeight {
+		bankImage, err := util.ImageRectFromImage(
+			img,
+			0,
+			y,
+			CHRBankImageWidth,
+			CHRBankImageHeight,
+		)
+		if err != nil {
+			return err
+		}
 
-func (chr *NESCHR) InjectImageFromFile(path string) error {
-	chunk, err := util.ReadChunk(path)
-	if err != nil {
-		return err
-	}
+		if isEmpty {
+			bank := NewCHREmptyBank()
+			err := bank.SetFromImage(bankImage)
+			if err != nil {
+				return err
+			}
 
-	r := bytes.NewReader(chunk)
-
-	img, err := png.Decode(r)
-	if err != nil {
-		return err
-	}
-
-	return chr.InjectImage(img)
-}
-
-func (chr *NESCHR) Save(path string) error {
-	return util.WriteChunk(path, chr.chunk)
-}
-
-func (chr *NESCHR) SaveImage(path string) error {
-	img, err := chr.ExtractImage()
-	if err != nil {
-		return err
-	}
-
-	out, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-
-	defer out.Close()
-
-	err = png.Encode(out, img)
-	if err != nil {
-		return nil
+			chr.AddBank(bank)
+		} else {
+			err := chr.banks[y/CHRBankImageHeight].SetFromImage(bankImage)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil

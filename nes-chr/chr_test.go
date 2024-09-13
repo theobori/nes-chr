@@ -8,11 +8,11 @@ import (
 
 const (
 	NESFilePath      = "../roms/test.nes"
-	NESCHRROMPath    = "../roms/test.chr"
+	CHRROMPath       = "../roms/test.chr"
 	NESTestImagePath = "../test.png"
 )
 
-func TestCHRFromFile(t *testing.T) {
+func TestCHRFromNESFile(t *testing.T) {
 	nesFile, err := NewNESFile(NESFilePath)
 	if err != nil {
 		t.Fatal(err)
@@ -20,36 +20,21 @@ func TestCHRFromFile(t *testing.T) {
 
 	chr := nesFile.CHR()
 
-	err = chr.SetColorPalette(1)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = chr.SaveImage(NESTestImagePath)
+	err = SaveImage(chr, NESTestImagePath)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestCHRInjectImage(t *testing.T) {
-	chr := NewEmptyNESCHR()
+	chr := NewEmptyCHR()
 
-	err := chr.SetColorPalette(1)
+	err := SetFromImageFile(chr, NESTestImagePath)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = chr.InjectImageFromFile(NESTestImagePath)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	original, err := NewNESCHRFromFile(NESCHRROMPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = chr.SaveImage("test.png")
+	original, err := NewCHRFromFile(CHRROMPath)
 	if err != nil {
 		t.Fatal(err)
 	}

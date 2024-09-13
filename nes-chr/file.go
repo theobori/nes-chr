@@ -1,8 +1,6 @@
 package neschr
 
 import (
-	"bytes"
-	"encoding/binary"
 	"fmt"
 
 	"github.com/theobori/nes-chr/internal/util"
@@ -15,32 +13,6 @@ const (
 	CHRRomUnitSize = 0x2000
 	CHRRomBankSize = 0x1000
 )
-
-type BlockMetadata struct {
-	Size     int
-	Position int
-}
-
-func (bm *BlockMetadata) EndPosition() int {
-	return bm.Position + bm.Size
-}
-
-func NewNESHeader(chunk []byte) (*NESHeader, error) {
-	var header NESHeader
-
-	if len(chunk) < 16 {
-		return nil, fmt.Errorf("chunk size must be at least 16 bytes")
-	}
-
-	r := bytes.NewReader(chunk)
-
-	err := binary.Read(r, binary.LittleEndian, &header)
-	if err != nil {
-		return nil, err
-	}
-
-	return &header, nil
-}
 
 type NESFile struct {
 	header      *NESHeader
@@ -110,14 +82,14 @@ func (nf *NESFile) Parse() error {
 	return nf.parseCHR()
 }
 
-func (nf *NESFile) CHR() *NESCHR {
+func (nf *NESFile) CHR() *CHR {
 	m := nf.CHRMetadata
 	chrChunk := nf.chunk[m.Position:m.EndPosition()]
 
-	return NewNESCHR(chrChunk)
+	return NewCHR(chrChunk)
 }
 
-func (nf *NESFile) UpdateCHR(chr *NESCHR) error {
+func (nf *NESFile) UpdateCHR(chr *CHR) error {
 	m := nf.CHRMetadata
 
 	chrChunk := chr.Chunk()
