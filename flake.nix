@@ -1,39 +1,43 @@
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    treefmt-nix.url = "github:numtide/treefmt-nix";
+    flake-utils.url = "github:numtide/flake-utils";
   };
 
   outputs =
-    { self, nixpkgs }:
-    let
-      supportedSystems = [
-        "x86_64-linux"
-        "aarch64-linux"
-        "x86_64-darwin"
-        "aarch64-darwin"
-      ];
-
-      forEachSupportedSystem =
-        f: nixpkgs.lib.genAttrs supportedSystems (system: f { pkgs = import nixpkgs { inherit system; }; });
-    in
     {
-      packages = forEachSupportedSystem (
-        { pkgs }:
-        {
-          default = pkgs.callPackage ./. { };
-        }
-      );
+      self,
+      nixpkgs,
+      treefmt-nix,
+      flake-utils,
+    }:
+    flake-utils.lib.eachDefaultSystem (
+      system:
+      let
+        pkgs = nixpkgs.legacyPackages.${system};
 
-      devShells = forEachSupportedSystem (
-        { pkgs }:
-        {
+        treefmtEval = treefmt-nix.lib.evalModule pkgs ./treefmt.nix;
+      in
+      {
+        packages = {
+          default = pkgs.callPackage ./. { };
+        };
+
+        devShells = {
           default = pkgs.mkShell {
             packages = with pkgs; [
               go
               golangci-lint
             ];
           };
-        }
-      );
-    };
+        };
+
+        formatter = treefmtEval.config.build.wrapper;
+
+        checks = {
+          formatting = treefmtEval.config.build.check self;
+        };
+      }
+    );
 }

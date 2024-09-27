@@ -1,6 +1,8 @@
 # NES CHR ROM manipulation library
 
-[![build](https://github.com/theobori/nes-chr/actions/workflows/build.yml/badge.svg)](https://github.com/theobori/nes-chr/actions/workflows/build.yml) [![lint](https://github.com/theobori/nes-chr/actions/workflows/lint.yml/badge.svg)](https://github.com/theobori/nes-chr/actions/workflows/lint.yml)
+[![build](https://github.com/theobori/nes-chr/actions/workflows/build.yml/badge.svg)](https://github.com/theobori/nes-chr/actions/workflows/build.yml)
+
+[![built with nix](https://builtwithnix.org/badge.svg)](https://builtwithnix.org)
 
 This is a highly flexible toy KISS Go module designed to help you extract the CHR ROM and its banks from a NES game or inject an images into the game.
 

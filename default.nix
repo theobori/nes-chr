@@ -1,6 +1,6 @@
 { lib, buildGoModule }:
 
-buildGoModule rec {
+buildGoModule {
   pname = "nes-chr";
   version = "0.0.1";
 
@@ -10,7 +10,7 @@ buildGoModule rec {
 
   meta = with lib; {
     description = "Extract the NES CHR ROM graphics";
-    homepage = "https://github.com/theobori/${pname}";
+    homepage = "https://github.com/theobori/nes-chr";
     license = licenses.mit;
   };
 }
